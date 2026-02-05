@@ -1,6 +1,10 @@
 local panelOpen = false
 local hasAccess = false
 
+local adminRank = 0
+local isOnDuty = false
+local actionRanks = {}
+
 local godMode = false
 local noclip = false
 local noClipSpeed = 1.5
@@ -12,10 +16,130 @@ local superJump = false
 local fastRun = false
 local engineForcedOn = false
 
+local savedAppearance = nil
+
 local function notify(msg)
     BeginTextCommandThefeedPost('STRING')
     AddTextComponentSubstringPlayerName(msg)
     EndTextCommandThefeedPostTicker(false, false)
+end
+
+local function captureAppearance(ped)
+    local data = {
+        model = GetEntityModel(ped),
+        components = {},
+        props = {}
+    }
+
+    for i = 0, 11 do
+        data.components[i] = {
+            drawable = GetPedDrawableVariation(ped, i),
+            texture = GetPedTextureVariation(ped, i),
+            palette = GetPedPaletteVariation(ped, i)
+        }
+    end
+
+    for i = 0, 7 do
+        data.props[i] = {
+            index = GetPedPropIndex(ped, i),
+            texture = GetPedPropTextureIndex(ped, i)
+        }
+    end
+
+    return data
+end
+
+local function loadModel(modelName)
+    local model = modelName
+    if type(modelName) == 'string' then
+        model = joaat(modelName)
+    end
+
+    if not IsModelInCdimage(model) then
+        return false
+    end
+
+    RequestModel(model)
+    while not HasModelLoaded(model) do
+        Wait(0)
+    end
+
+    SetPlayerModel(PlayerId(), model)
+    SetModelAsNoLongerNeeded(model)
+    return true
+end
+
+local function applyAppearance(data)
+    if not data then
+        return
+    end
+
+    if data.model then
+        loadModel(data.model)
+    end
+
+    local ped = PlayerPedId()
+
+    if data.components then
+        for i = 0, 11 do
+            local c = data.components[i]
+            if c then
+                SetPedComponentVariation(ped, i, c.drawable, c.texture, c.palette or 0)
+            end
+        end
+    end
+
+    ClearAllPedProps(ped)
+    if data.props then
+        for i = 0, 7 do
+            local p = data.props[i]
+            if p and p.index and p.index >= 0 then
+                SetPedPropIndex(ped, i, p.index, p.texture or 0, true)
+            end
+        end
+    end
+end
+
+local function applyDutyOutfit(rank, outfit)
+    local ped = PlayerPedId()
+
+    if not savedAppearance then
+        savedAppearance = captureAppearance(ped)
+    end
+
+    if outfit and outfit.model then
+        loadModel(outfit.model)
+        ped = PlayerPedId()
+    end
+
+    if outfit and outfit.components then
+        for compId, comp in pairs(outfit.components) do
+            SetPedComponentVariation(ped, tonumber(compId), comp.drawable, comp.texture or 0, comp.palette or 0)
+        end
+    end
+
+    notify(('~g~Duty ON | Admin %s'):format(rank))
+end
+
+local function clearDutyOutfit()
+    if savedAppearance then
+        applyAppearance(savedAppearance)
+        savedAppearance = nil
+    end
+    notify('~r~Duty OFF | Előző kinézet visszaállítva')
+end
+
+local function hasActionPermission(action)
+    local required = actionRanks[action] or 99
+    if adminRank < required then
+        notify(('~r~Ehhez legalább Admin %s rang kell.'):format(required))
+        return false
+    end
+    if action ~= 'duty' and not isOnDuty then
+        notify('~r~Előbb duty-ba kell lépned (/dutyay)!')
+        return false
+    end
+    return true
 end
 
 local function setPanel(state)
@@ -29,6 +153,11 @@ local function setPanel(state)
             hour = Config.DefaultTime.hour,
             minute = Config.DefaultTime.minute,
             noclipSpeed = noClipSpeed
+        },
+        admin = {
+            rank = adminRank,
+            duty = isOnDuty,
+            actionRanks = actionRanks
         }
     })
 end
@@ -66,7 +195,7 @@ end
 
 RegisterNetEvent('ay_devpanel:togglePanel', function()
     TriggerServerEvent('ay_devpanel:requestOpen')
-    Wait(80)
+    Wait(100)
     if not hasAccess then
         notify('~r~Nincs jogosultsagod a developer panelhez.')
         return
@@ -76,6 +205,41 @@ end)
 
 RegisterNetEvent('ay_devpanel:setPermission', function(state)
     hasAccess = state
+end)
+
+RegisterNetEvent('ay_devpanel:adminState', function(state)
+    adminRank = tonumber(state.rank) or 0
+    isOnDuty = state.duty == true
+    actionRanks = state.actionRanks or {}
+
+    SendNUIMessage({
+        action = 'adminState',
+        admin = {
+            rank = adminRank,
+            duty = isOnDuty,
+            actionRanks = actionRanks
+        }
+    })
+end)
+
+RegisterNetEvent('ay_devpanel:setDutyClient', function(state, rank, outfit)
+    isOnDuty = state == true
+    adminRank = tonumber(rank) or adminRank
+
+    if isOnDuty then
+        applyDutyOutfit(adminRank, outfit)
+    else
+        clearDutyOutfit()
+    end
+
+    SendNUIMessage({
+        action = 'adminState',
+        admin = {
+            rank = adminRank,
+            duty = isOnDuty,
+            actionRanks = actionRanks
+        }
+    })
 end)
 
 RegisterNUICallback('close', function(_, cb)
@@ -102,6 +266,17 @@ end)
 RegisterNUICallback('action', function(data, cb)
     local action = data.action
     local ped = PlayerPedId()
+
+    if action == 'duty' then
+        TriggerServerEvent('ay_devpanel:toggleDuty')
+        cb('ok')
+        return
+    end
+
+    if not hasActionPermission(action) then
+        cb('ok')
+        return
+    end
 
     if action == 'godmode' then
         setGodMode(data.state)
@@ -261,24 +436,12 @@ CreateThread(function()
             local forward = getForwardVector(rot)
             local camRight = GetEntityRightVector(ped)
 
-            if IsControlPressed(0, 32) then -- W
-                coords = coords + (forward * noClipSpeed)
-            end
-            if IsControlPressed(0, 33) then -- S
-                coords = coords - (forward * noClipSpeed)
-            end
-            if IsControlPressed(0, 34) then -- A
-                coords = coords - (camRight * noClipSpeed)
-            end
-            if IsControlPressed(0, 35) then -- D
-                coords = coords + (camRight * noClipSpeed)
-            end
-            if IsControlPressed(0, 44) then -- Q
-                coords = coords + vector3(0.0, 0.0, noClipSpeed)
-            end
-            if IsControlPressed(0, 38) then -- E
-                coords = coords - vector3(0.0, 0.0, noClipSpeed)
-            end
+            if IsControlPressed(0, 32) then coords = coords + (forward * noClipSpeed) end
+            if IsControlPressed(0, 33) then coords = coords - (forward * noClipSpeed) end
+            if IsControlPressed(0, 34) then coords = coords - (camRight * noClipSpeed) end
+            if IsControlPressed(0, 35) then coords = coords + (camRight * noClipSpeed) end
+            if IsControlPressed(0, 44) then coords = coords + vector3(0.0, 0.0, noClipSpeed) end
+            if IsControlPressed(0, 38) then coords = coords - vector3(0.0, 0.0, noClipSpeed) end
 
             SetEntityCoordsNoOffset(ped, coords.x, coords.y, coords.z, true, true, true)
             SetEntityRotation(ped, 0.0, 0.0, rot.z, 2, true)

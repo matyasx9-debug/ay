@@ -1,58 +1,48 @@
 # AY DevPanel (FiveM)
 
-Egy modern, NUI-alapú developer panel FiveM szerverekhez, sok extra fejlesztői/admin funkcióval.
+Egy modern, NUI-alapú developer panel FiveM szerverekhez, most már **Admin 1 - Admin 5** rangrendszerrel, duty móddal és admin controllerrel.
 
-## Funkciók
-### Player
-- Godmode
-- Heal + armor
-- Láthatatlanság (Invisible)
-- Noclip + állítható noclip speed
-- Super Jump
-- Fast Run
-- Koordináta HUD
-- Clean ped (vér/sérülés/kosz törlés)
-- Teleport waypointra
-- Teleport konkrét XYZ koordinátára
-- Fegyver adás (weapon hash név alapján)
+## Új rendszer (kérés alapján)
+- **Admin rangok 1-től 5-ig**
+- **Ranghoz kötött funkciók** (minden action minimum ranghoz van kötve)
+- **Admin Controller (Boss = Admin 5)**
+- **Duty rendszer**:
+  - Parancs: `/dutyay`
+  - Panelből is kapcsolható (Duty ON/OFF gomb)
+- Duty belépéskor rang szerinti admin ruha (zöld árnyalatok rankenként)
+- Duty kilépéskor visszaáll az előző ped/skin (amit duty előtt viselt a játékos)
 
-### Vehicle
-- Jármű spawn
-- Jármű javítás
-- Full fuel
-- Flip vehicle
-- Max upgrade (modok + turbo stb.)
-- Force engine ON
-- Jármű törlés
+## Fontos parancsok
+- Panel nyitás: `/devpanel`
+- Duty váltás: `/dutyay`
+- Rang állítás (csak Boss/Admin 5 vagy konzol):
+  - `/setadminay [id] [0-5]`
 
-### World
-- Időjárás állítás
-- Idő állítás
-- Freeze time
-- Blackout (globális)
-- Area tisztítás (peds/vehicles/objects) megadott sugárral
+## Rang alapú jogosultságok
+A `config.lua` fájlban található:
+- `Config.ActionRanks` táblában adható meg, melyik funkcióhoz minimum milyen rang kell.
+- A legtöbb funkció duty állapotot is igényel.
 
-### Communication / Security
-- Globál announce üzenet
-- Jogosultság ellenőrzés ACE vagy identifier alapján
-- Opcionális Discord webhook audit log
+## Rang hozzárendelés
+Két mód:
+1. **Identifier alapú** (ajánlott):
+   - `Config.AdminRanks['license:...'] = 5`
+2. **ACE fallback**:
+   - `Config.AceRanks[5] = 'devpanel.rank5'`, stb.
 
 ## Telepítés
 1. Másold a `devpanel` mappát a `resources` könyvtárba.
-2. `server.cfg`:
+2. `server.cfg` példa:
    ```cfg
    ensure devpanel
-   add_ace group.admin devpanel.use allow
-   add_principal identifier.license:YOUR_LICENSE group.admin
-   ```
-3. Ha identifier alapú jogosultságot szeretnél, akkor `config.lua`:
-   - `Config.PermissionMode = 'ids'`
-   - töltsd fel a `Config.AllowedIdentifiers` listát.
 
-## Használat
-- Chat parancs: `/devpanel`
-- Keybind: `F7` (átállítható a `config.lua`-ban)
+   # opcionális ACE fallback
+   add_ace group.owner devpanel.rank5 allow
+   add_principal identifier.license:YOUR_LICENSE group.owner
+   ```
+3. A `config.lua`-ban töltsd fel az `AdminRanks` táblát a license ID-kkel.
 
 ## Megjegyzés
-- A script framework-független (ESX/QBCore nélkül is fut).
-- Bizonyos funkciók (pl. üzemanyag) szerver oldali fuel resource-tól függhetnek.
+- A duty ruha jelenleg freemode alapra van optimalizálva (`Config.DutyOutfits`).
+- Ha egyedi ruharendszert használsz, finomhangold a `Config.DutyOutfits` komponenseit.
+- Opcionális webhook log támogatás továbbra is elérhető (`Config.WebhookUrl`).

@@ -2,6 +2,9 @@ const resourceName = typeof GetParentResourceName === 'function' ? GetParentReso
 
 const panel = document.getElementById('panel');
 const closeBtn = document.getElementById('closeBtn');
+const adminInfo = document.getElementById('adminInfo');
+
+let adminState = { rank: 0, duty: false, actionRanks: {} };
 
 function post(endpoint, payload = {}) {
   return fetch(`https://${resourceName}/${endpoint}`, {
@@ -9,6 +12,10 @@ function post(endpoint, payload = {}) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
+}
+
+function renderAdminInfo() {
+  adminInfo.textContent = `Rang: Admin ${adminState.rank} | Duty: ${adminState.duty ? 'ON' : 'OFF'}`;
 }
 
 window.addEventListener('message', (event) => {
@@ -21,6 +28,15 @@ window.addEventListener('message', (event) => {
       document.getElementById('minute').value = data.defaults.minute;
       document.getElementById('noclipSpeed').value = data.defaults.noclipSpeed;
     }
+    if (data.admin) {
+      adminState = data.admin;
+      renderAdminInfo();
+    }
+  }
+
+  if (data.action === 'adminState' && data.admin) {
+    adminState = data.admin;
+    renderAdminInfo();
   }
 });
 
@@ -72,3 +88,5 @@ toggles.forEach(({ id, action }) => {
     post('action', { action, state: el.checked });
   });
 });
+
+renderAdminInfo();

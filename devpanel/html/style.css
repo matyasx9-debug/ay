@@ -95,3 +95,9 @@ button.danger:hover { border-color: var(--danger); color: var(--danger); }
 @media (max-width: 760px) {
   .grid { grid-template-columns: 1fr; }
 }
+
+
+small { color: #9ec4ff; }
+.hint { padding: 10px; border: 1px dashed rgba(255,255,255,0.2); border-radius: 10px; }
+.rank { font-size: 0.75rem; color: #9effb7; margin-left: 6px; }
+code { color: #ffcf84; }
