@@ -3,8 +3,20 @@ const resourceName = typeof GetParentResourceName === 'function' ? GetParentReso
 const panel = document.getElementById('panel');
 const closeBtn = document.getElementById('closeBtn');
 const adminInfo = document.getElementById('adminInfo');
+const developerSection = document.getElementById('developerSection');
+const panelTitle = document.getElementById('panelTitle');
+const panelLogo = document.getElementById('panelLogo');
 
-let adminState = { rank: 0, duty: false, actionRanks: {} };
+let adminState = {
+  rank: 0,
+  rankName: 'N/A',
+  duty: false,
+  isDeveloper: false,
+  actionRanks: {},
+  ranks: {},
+  localeUi: {},
+  branding: {}
+};
 
 function post(endpoint, payload = {}) {
   return fetch(`https://${resourceName}/${endpoint}`, {
@@ -14,8 +26,36 @@ function post(endpoint, payload = {}) {
   });
 }
 
+function rankNameByLevel(level) {
+  return adminState.ranks?.[String(level)]?.name || adminState.ranks?.[level]?.name || `R${level}`;
+}
+
+function updateRankBadges() {
+  document.querySelectorAll('[data-rank-action]').forEach((el) => {
+    const action = el.dataset.rankAction;
+    const required = Number(adminState.actionRanks?.[action] ?? 0);
+    el.textContent = required > 0 ? `${rankNameByLevel(required)}+` : '';
+  });
+}
+
 function renderAdminInfo() {
-  adminInfo.textContent = `Rang: Admin ${adminState.rank} | Duty: ${adminState.duty ? 'ON' : 'OFF'}`;
+  const rankLabel = adminState.localeUi?.rank || 'Rank';
+  const dutyLabel = adminState.localeUi?.duty || 'Duty';
+  adminInfo.textContent = `${rankLabel}: ${adminState.rankName} (${adminState.rank}) | ${dutyLabel}: ${adminState.duty ? 'ON' : 'OFF'}`;
+
+  const brandedName = adminState.branding?.panelName || adminState.localeUi?.panelName || 'AY Panel';
+  const brandedLogo = adminState.branding?.panelLogo || 'AY';
+  panelTitle.textContent = brandedName;
+  panelLogo.textContent = brandedLogo;
+
+  developerSection.classList.toggle('hidden', !adminState.isDeveloper);
+
+  if (adminState.localeUi?.dutyInfo) document.getElementById('dutyInfo').textContent = adminState.localeUi.dutyInfo;
+  if (adminState.localeUi?.sectionDeveloper) document.getElementById('developerTitle').textContent = adminState.localeUi.sectionDeveloper;
+  if (adminState.localeUi?.developerHint) document.getElementById('developerHint').textContent = adminState.localeUi.developerHint;
+  if (adminState.localeUi?.announcePlaceholder) document.getElementById('announce').placeholder = adminState.localeUi.announcePlaceholder;
+
+  updateRankBadges();
 }
 
 window.addEventListener('message', (event) => {
@@ -29,13 +69,13 @@ window.addEventListener('message', (event) => {
       document.getElementById('noclipSpeed').value = data.defaults.noclipSpeed;
     }
     if (data.admin) {
-      adminState = data.admin;
+      adminState = { ...adminState, ...data.admin };
       renderAdminInfo();
     }
   }
 
   if (data.action === 'adminState' && data.admin) {
-    adminState = data.admin;
+    adminState = { ...adminState, ...data.admin };
     renderAdminInfo();
   }
 });
@@ -65,6 +105,8 @@ document.querySelectorAll('[data-action]').forEach((btn) => {
     }
     if (action === 'giveWeapon') payload.weapon = document.getElementById('weaponName').value.trim();
     if (action === 'clearArea') payload.radius = Number(document.getElementById('clearRadius').value || 50);
+    if (action === 'setPedModel') payload.model = document.getElementById('pedModel').value.trim();
+    if (action === 'spawnObject') payload.object = document.getElementById('objectModel').value.trim();
 
     post('action', payload);
   });
@@ -79,11 +121,14 @@ const toggles = [
   { id: 'fastRun', action: 'fastRun' },
   { id: 'freezeTime', action: 'freezeTime' },
   { id: 'blackout', action: 'blackout' },
-  { id: 'forceEngine', action: 'forceEngine' }
+  { id: 'forceEngine', action: 'forceEngine' },
+  { id: 'noRagdoll', action: 'noRagdoll' },
+  { id: 'devEntityDebug', action: 'devEntityDebug' }
 ];
 
 toggles.forEach(({ id, action }) => {
   const el = document.getElementById(id);
+  if (!el) return;
   el.addEventListener('change', () => {
     post('action', { action, state: el.checked });
   });

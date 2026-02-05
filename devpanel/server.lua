@@ -1,37 +1,64 @@
-local AdminController = {
-    players = {}
-}
+local AdminController = { players = {} }
+
+local function getLocale()
+    return Config.Locales[Config.Language] or Config.Locales.hu
+end
+
+local function t(key, ...)
+    local locale = getLocale()
+    local text = locale[key] or key
+    local args = { ... }
+    for i, value in ipairs(args) do
+        text = text:gsub('{' .. (i - 1) .. '}', tostring(value))
+    end
+    return text
+end
+
+local function getMaxRank()
+    local maxRank = 0
+    for rank in pairs(Config.Ranks or {}) do
+        maxRank = math.max(maxRank, tonumber(rank) or 0)
+    end
+    return maxRank
+end
+
+local function getRankLabel(rank)
+    local def = Config.Ranks[rank]
+    return def and def.name or ('Admin %s'):format(rank)
+end
+
+local function isDeveloper(rank)
+    return Config.Ranks[rank] and Config.Ranks[rank].developer == true
+end
+
+local function canManageAdmins(rank)
+    return Config.Ranks[rank] and Config.Ranks[rank].canManageAdmins == true
+end
 
 local function logToDiscord(message)
-    if not Config.EnableWebhookLogs or Config.WebhookUrl == '' then
-        return
-    end
-
+    if not Config.EnableWebhookLogs or Config.WebhookUrl == '' then return end
     PerformHttpRequest(Config.WebhookUrl, function() end, 'POST', json.encode({
-        username = 'DevPanel',
-        embeds = {
-            {
-                title = 'Developer Panel Action',
-                description = message,
-                color = 3447003,
-                footer = { text = os.date('%Y-%m-%d %H:%M:%S') }
-            }
-        }
+        username = 'AY Panel',
+        embeds = {{
+            title = 'AY Panel Action',
+            description = message,
+            color = 3447003,
+            footer = { text = os.date('%Y-%m-%d %H:%M:%S') }
+        }}
     }), { ['Content-Type'] = 'application/json' })
 end
 
 local function getRankFromIdentifiers(src)
-    local ids = GetPlayerIdentifiers(src)
-    for _, id in ipairs(ids) do
+    for _, id in ipairs(GetPlayerIdentifiers(src)) do
         local rank = Config.AdminRanks[id]
         if rank then
-            return math.min(Config.MaxRank, math.max(0, tonumber(rank) or 0))
+            return math.max(0, math.floor(tonumber(rank) or 0))
         end
     end
 
     if Config.UseAceFallback then
-        for rank = Config.MaxRank, 1, -1 do
-            local ace = Config.AceRanks[rank]
+        for rank = getMaxRank(), 1, -1 do
+            local ace = Config.Ranks[rank] and Config.Ranks[rank].ace
             if ace and IsPlayerAceAllowed(src, ace) then
                 return rank
             end
@@ -42,26 +69,18 @@ local function getRankFromIdentifiers(src)
 end
 
 local function ensureAdminState(src)
-    local state = AdminController.players[src]
-    if not state then
-        state = {
-            rank = getRankFromIdentifiers(src),
-            duty = false
-        }
-        AdminController.players[src] = state
-    end
-    return state
+    AdminController.players[src] = AdminController.players[src] or {
+        rank = getRankFromIdentifiers(src),
+        duty = false
+    }
+    return AdminController.players[src]
 end
 
 local function hasActionAccess(src, action, requiresDuty)
     local state = ensureAdminState(src)
-    local minRank = Config.ActionRanks[action] or 99
-    if state.rank < minRank then
-        return false, state
-    end
-    if requiresDuty and not state.duty then
-        return false, state
-    end
+    local minRank = Config.ActionRanks[action] or 999
+    if state.rank < minRank then return false, state end
+    if requiresDuty and action ~= 'duty' and not state.duty then return false, state end
     return true, state
 end
 
@@ -69,9 +88,13 @@ local function syncState(src)
     local state = ensureAdminState(src)
     TriggerClientEvent('ay_devpanel:adminState', src, {
         rank = state.rank,
+        rankName = getRankLabel(state.rank),
         duty = state.duty,
-        maxRank = Config.MaxRank,
         actionRanks = Config.ActionRanks,
+        ranks = Config.Ranks,
+        isDeveloper = isDeveloper(state.rank),
+        localeUi = getLocale().ui,
+        branding = Config.Branding,
         dutyOutfit = Config.DutyOutfits[state.rank]
     })
 end
@@ -81,16 +104,10 @@ local function setDuty(src, value)
     state.duty = value
     syncState(src)
     TriggerClientEvent('ay_devpanel:setDutyClient', src, value, state.rank, Config.DutyOutfits[state.rank])
-
-    local playerName = GetPlayerName(src) or ('ID %s'):format(src)
-    logToDiscord(('**%s** duty state: `%s` (rank %s)'):format(playerName, tostring(value), state.rank))
 end
 
 local function notify(src, msg)
-    TriggerClientEvent('chat:addMessage', src, {
-        color = { 80, 200, 120 },
-        args = { 'DEV', msg }
-    })
+    TriggerClientEvent('chat:addMessage', src, { color = { 80, 200, 120 }, args = { 'AY', msg } })
 end
 
 RegisterNetEvent('ay_devpanel:requestOpen', function()
@@ -98,95 +115,69 @@ RegisterNetEvent('ay_devpanel:requestOpen', function()
     local state = ensureAdminState(src)
     TriggerClientEvent('ay_devpanel:setPermission', src, state.rank > 0)
     syncState(src)
-    if state.rank > 0 then
-        logToDiscord(('**%s** opened the panel (rank %s).'):format(GetPlayerName(src) or ('ID %s'):format(src), state.rank))
-    end
 end)
 
 RegisterNetEvent('ay_devpanel:toggleDuty', function()
     local src = source
     local allowed, state = hasActionAccess(src, 'duty', false)
-    if not allowed then
-        notify(src, '^1Nincs jogosultságod a duty rendszerhez.')
-        return
-    end
+    if not allowed then notify(src, t('notAllowedDuty')); return end
     setDuty(src, not state.duty)
-    notify(src, ('Duty: %s'):format(state.duty and '^2ON' or '^1OFF'))
+    notify(src, t('dutyStatus', state.duty and t('on') or t('off')))
 end)
 
 RegisterNetEvent('ay_devpanel:serverAction', function(action, payload)
     local src = source
-    local allowed, state = hasActionAccess(src, action, true)
-    if not allowed then
-        notify(src, '^1Nincs rang vagy duty jogosultság ehhez a művelethez.')
-        return
-    end
+    local allowed = hasActionAccess(src, action, true)
+    if not allowed then notify(src, t('notAllowedAction')); return end
 
     if action == 'setWeather' and type(payload) == 'string' then
         TriggerClientEvent('ay_devpanel:setWeatherClient', -1, payload)
-        logToDiscord(('**%s** changed weather to `%s`.'):format(GetPlayerName(src), payload))
     elseif action == 'setTime' and type(payload) == 'table' then
-        local hour = tonumber(payload.hour) or 12
-        local minute = tonumber(payload.minute) or 0
-        TriggerClientEvent('ay_devpanel:setTimeClient', -1, hour, minute)
-        logToDiscord(('**%s** set time to `%02d:%02d`.'):format(GetPlayerName(src), hour, minute))
+        TriggerClientEvent('ay_devpanel:setTimeClient', -1, tonumber(payload.hour) or 12, tonumber(payload.minute) or 0)
     elseif action == 'announce' and type(payload) == 'string' and payload ~= '' then
+        local st = ensureAdminState(src)
         TriggerClientEvent('chat:addMessage', -1, {
             color = { 255, 80, 80 },
             multiline = true,
-            args = { ('DEV R%s'):format(state.rank), payload }
+            args = { ('AY %s'):format(getRankLabel(st.rank)), payload }
         })
-        logToDiscord(('**%s** sent an announcement: %s'):format(GetPlayerName(src), payload))
     elseif action == 'setBlackout' and type(payload) == 'boolean' then
         TriggerClientEvent('ay_devpanel:setBlackoutClient', -1, payload)
-        logToDiscord(('**%s** toggled blackout: `%s`.'):format(GetPlayerName(src), tostring(payload)))
     end
+
+    logToDiscord(('**%s** -> `%s`'):format(GetPlayerName(src) or ('ID %s'):format(src), action))
 end)
 
 RegisterCommand(Config.OpenCommand, function(src)
-    if src == 0 then
-        print('This command can only be used in-game.')
-        return
-    end
-
+    if src == 0 then print('This command can only be used in-game.'); return end
     TriggerClientEvent('ay_devpanel:togglePanel', src)
 end, false)
 
 RegisterCommand(Config.DutyCommand, function(src)
-    if src == 0 then
-        print('This command can only be used in-game.')
-        return
-    end
-
+    if src == 0 then print('This command can only be used in-game.'); return end
     local allowed, state = hasActionAccess(src, 'duty', false)
-    if not allowed then
-        notify(src, '^1Nincs jogosultságod a duty rendszerhez.')
-        return
-    end
-
+    if not allowed then notify(src, t('notAllowedDuty')); return end
     setDuty(src, not state.duty)
-    notify(src, ('Duty: %s'):format(state.duty and '^2ON' or '^1OFF'))
+    notify(src, t('dutyStatus', state.duty and t('on') or t('off')))
 end, false)
 
 RegisterCommand('setadminay', function(src, args)
-    local issuer = ensureAdminState(src)
-    if src ~= 0 and issuer.rank < Config.BossRank then
-        notify(src, '^1Csak a főnök (Admin 5) állíthat rangot.')
+    if src ~= 0 and not canManageAdmins(ensureAdminState(src).rank) then
+        notify(src, t('controllerOnly'))
         return
     end
 
     local target = tonumber(args[1] or '')
-    local rank = tonumber(args[2] or '')
-    if not target or not GetPlayerName(target) then
+    local rank = math.max(0, math.floor(tonumber(args[2] or '') or -1))
+    if not target or not GetPlayerName(target) or (rank > 0 and not Config.Ranks[rank]) then
         if src == 0 then
-            print('Usage: setadminay <id> <rank 0-5>')
+            print('Usage: setadminay <id> <rank> (rank must exist in Config.Ranks)')
         else
-            notify(src, '^1Hibás target ID.')
+            notify(src, t('invalidTarget'))
         end
         return
     end
 
-    rank = math.floor(math.min(Config.MaxRank, math.max(0, rank or 0)))
     local st = ensureAdminState(target)
     st.rank = rank
     if rank == 0 and st.duty then
@@ -195,17 +186,11 @@ RegisterCommand('setadminay', function(src, args)
     end
 
     syncState(target)
-    notify(target, ('^3Admin rangod frissült: ^2Admin %s'):format(rank))
-
-    local issuerName = src == 0 and 'CONSOLE' or (GetPlayerName(src) or ('ID %s'):format(src))
-    local targetName = GetPlayerName(target) or ('ID %s'):format(target)
-    logToDiscord(('**%s** set admin rank of **%s** to `%s`.'):format(issuerName, targetName, rank))
+    notify(target, t('rankUpdated', getRankLabel(rank)))
 
     if src ~= 0 then
-        notify(src, ('^2Beállítva: %s -> Admin %s'):format(targetName, rank))
+        notify(src, t('setRankDone', GetPlayerName(target) or ('ID %s'):format(target), getRankLabel(rank)))
     end
 end, true)
 
-AddEventHandler('playerDropped', function()
-    AdminController.players[source] = nil
-end)
+AddEventHandler('playerDropped', function() AdminController.players[source] = nil end)

@@ -101,3 +101,7 @@ small { color: #9ec4ff; }
 .hint { padding: 10px; border: 1px dashed rgba(255,255,255,0.2); border-radius: 10px; }
 .rank { font-size: 0.75rem; color: #9effb7; margin-left: 6px; }
 code { color: #ffcf84; }
+
+
+.title-wrap { display: flex; align-items: center; gap: 10px; }
+.logo { min-width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg,#4e9eff,#7dffb3); color: #0d1828; display:flex; align-items:center; justify-content:center; font-weight:800; letter-spacing:0.4px; }
