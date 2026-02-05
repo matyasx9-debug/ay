@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AY DevPanel</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main id="panel" class="hidden">
+    <header>
+      <h1>AY Developer Panel</h1>
+      <button id="closeBtn">✕</button>
+    </header>
+
+    <section>
+      <h2>Player</h2>
+      <div class="grid">
+        <label><input type="checkbox" id="godmode" /> Godmode</label>
+        <button data-action="heal">Heal + Armor</button>
+        <label><input type="checkbox" id="invisible" /> Láthatatlanság</label>
+        <label><input type="checkbox" id="noclip" /> Noclip</label>
+        <div class="row">
+          <input id="noclipSpeed" type="number" min="0.5" max="15" step="0.1" value="1.5" />
+          <button data-action="setNoclipSpeed">Noclip speed</button>
+        </div>
+        <label><input type="checkbox" id="superJump" /> Super Jump</label>
+        <label><input type="checkbox" id="fastRun" /> Fast Run</label>
+        <label><input type="checkbox" id="coords" /> Koordináta HUD</label>
+        <button data-action="cleanPed">Clean Ped</button>
+        <button data-action="tpWaypoint">Teleport Waypointra</button>
+        <div class="row">
+          <input id="tpX" placeholder="X" type="number" step="0.01" />
+          <input id="tpY" placeholder="Y" type="number" step="0.01" />
+        </div>
+        <div class="row">
+          <input id="tpZ" placeholder="Z" type="number" step="0.01" />
+          <button data-action="tpCoords">Teleport XYZ</button>
+        </div>
+        <div class="row">
+          <input id="weaponName" placeholder="WEAPON_CARBINERIFLE" />
+          <button data-action="giveWeapon">Give Weapon</button>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Vehicle</h2>
+      <div class="grid">
+        <input id="vehicleModel" placeholder="jármű model (pl: sultanrs)" />
+        <button data-action="spawnVehicle">Spawn Vehicle</button>
+        <button data-action="fixVehicle">Fix Vehicle</button>
+        <button data-action="fullFuel">Full Fuel</button>
+        <button data-action="flipVehicle">Flip Vehicle</button>
+        <button data-action="maxVehicle">Max Upgrade</button>
+        <label><input type="checkbox" id="forceEngine" /> Force Engine ON</label>
+        <button data-action="deleteVehicle" class="danger">Delete Vehicle</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>World</h2>
+      <div class="grid world">
+        <select id="weather">
+          <option>EXTRASUNNY</option>
+          <option>CLEAR</option>
+          <option>CLOUDS</option>
+          <option>OVERCAST</option>
+          <option>RAIN</option>
+          <option>THUNDER</option>
+          <option>FOGGY</option>
+          <option>XMAS</option>
+        </select>
+        <button data-action="setWeather">Set Weather</button>
+        <div class="row">
+          <input type="number" id="hour" min="0" max="23" value="12" />
+          <input type="number" id="minute" min="0" max="59" value="0" />
+        </div>
+        <button data-action="setTime">Set Time</button>
+        <label><input type="checkbox" id="freezeTime" /> Freeze Time</label>
+        <label><input type="checkbox" id="blackout" /> Blackout</label>
+        <div class="row">
+          <input id="clearRadius" type="number" min="5" max="500" value="50" />
+          <button data-action="clearArea">Clear Area</button>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Communication</h2>
+      <div class="grid">
+        <input id="announce" placeholder="globál üzenet" />
+        <button data-action="announce">Send Announcement</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
